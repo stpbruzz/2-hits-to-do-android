@@ -1,3 +1,8 @@
 <resources>
     <string name="app_name">2-hits-to-do-android</string>
+    <string name="add_button_label">add</string>
+    <string name="download_button_label">download</string>
+    <string name="upload_button_label">upload</string>
+    <string name="edit_button_label">edit</string>
+    <string name="delete_button_label">delete</string>
 </resources>
