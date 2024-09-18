@@ -65,10 +65,9 @@ class TaskAdapter(var context: Context, var tasks: ArrayList<Task>) : BaseAdapte
             }
         }
 
-        holder.checkBox.setOnCheckedChangeListener(null)
         holder.checkBox.isChecked = task.flag
         holder.checkBox.setOnCheckedChangeListener { _, isChecked ->
-            task.flag = true
+            task.flag = isChecked
             tasks.sortBy { it.flag }
             notifyDataSetChanged()
         }
