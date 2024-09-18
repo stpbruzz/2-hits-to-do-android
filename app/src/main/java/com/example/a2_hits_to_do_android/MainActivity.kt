@@ -42,12 +42,21 @@ class TaskAdapter(var context: Context, var tasks: ArrayList<Task>) : BaseAdapte
     }
 
     override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
-        val view = inflater.inflate(R.layout.list_template, parent, false)
-        val holder = ViewHolder()
-        holder.checkBox = view.findViewById(R.id.checkbox)
-        holder.description = view.findViewById(R.id.task_description)
-        holder.editButton = view.findViewById(R.id.edit_button)
-        holder.deleteButton = view.findViewById(R.id.delete_button)
+        val view : View
+        val holder : ViewHolder
+
+        if (convertView == null) {
+            view = inflater.inflate(R.layout.list_template, parent, false)
+            holder = ViewHolder()
+            holder.checkBox = view.findViewById(R.id.checkbox)
+            holder.description = view.findViewById(R.id.task_description)
+            holder.editButton = view.findViewById(R.id.edit_button)
+            holder.deleteButton = view.findViewById(R.id.delete_button)
+            view.tag = holder
+        } else {
+            view = convertView
+            holder = convertView.tag as ViewHolder
+        }
 
         val task = tasks[position]
 
