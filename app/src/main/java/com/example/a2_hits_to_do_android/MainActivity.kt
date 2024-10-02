@@ -1,31 +1,36 @@
 package com.example.a2_hits_to_do_android
 
 import android.content.Context
-import android.net.Uri
 import android.os.Bundle
-import android.os.Environment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.BaseAdapter
-import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ListView
-import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
-import java.io.FileOutputStream
+import java.io.IOException
 
-data class Task(var description: String, var flag: Boolean = false)
+data class Task(var description: String, var id: Int? = null, var flag: Boolean = false)
 var TasksList = ArrayList<Task>()
+val client = OkHttpClient()
 
-class TaskAdapter(var context: Context, var tasks: ArrayList<Task>) : BaseAdapter() {
+class TaskAdapter(
+    private var context: Context,
+    private var tasks: ArrayList<Task>,
+    private val activity: MainActivity) : BaseAdapter() {
 
     private val inflater: LayoutInflater = LayoutInflater.from(context)
 
@@ -63,7 +68,7 @@ class TaskAdapter(var context: Context, var tasks: ArrayList<Task>) : BaseAdapte
         holder.description.setText(task.description)
         holder.description.isEnabled = false
 
-        holder.editButton.setOnClickListener() {
+        holder.editButton.setOnClickListener {
             if (!holder.description.isEnabled) {
                 holder.description.isEnabled = true
                 holder.editButton.setImageResource(R.drawable.ic_save)
@@ -71,18 +76,71 @@ class TaskAdapter(var context: Context, var tasks: ArrayList<Task>) : BaseAdapte
                 task.description = holder.description.text.toString()
                 holder.description.isEnabled = false
                 holder.editButton.setImageResource(R.drawable.ic_edit)
+
+                val id = tasks[position].id
+                val url = "http://10.0.2.2:5112/api/ToDo/$id/description"
+                val jsonObject = JSONObject()
+                jsonObject.put("description", task.description)
+
+                val mediaType = "application/json".toMediaTypeOrNull()
+                val body = jsonObject.toString().toRequestBody(mediaType)
+
+                val request = Request.Builder().url(url).patch(body).build()
+
+                client.newCall(request).enqueue(object: Callback {
+                    override fun onFailure(call: Call, e: IOException) {
+                        e.printStackTrace()
+                    }
+
+                    override fun onResponse(call: Call, response: Response) {
+                        (context as? AppCompatActivity)?.runOnUiThread {
+                            notifyDataSetChanged()
+                        }
+                    }
+                })
             }
         }
 
         holder.checkBox.isChecked = task.flag
         holder.checkBox.setOnCheckedChangeListener { _, isChecked ->
             task.flag = isChecked
-            notifyDataSetChanged()
+            val id = tasks[position].id
+            val url = "http://10.0.2.2:5112/api/ToDo/$id/flag"
+
+            val request = Request.Builder().url(url).patch("".toRequestBody(null)).build()
+
+            client.newCall(request).enqueue(object: Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    e.printStackTrace()
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    (context as? AppCompatActivity)?.runOnUiThread {
+                        notifyDataSetChanged()
+                    }
+                }
+            })
         }
 
         holder.deleteButton.setOnClickListener {
-            tasks.removeAt(position)
-            notifyDataSetChanged()
+            val id = tasks[position].id
+            val url = "http://10.0.2.2:5112/api/ToDo/$id"
+
+            val request = Request.Builder().url(url).delete().build()
+
+            client.newCall(request).enqueue(object: Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    e.printStackTrace()
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    (context as? AppCompatActivity)?.runOnUiThread {
+                        tasks.removeAt(position)
+                        notifyDataSetChanged()
+                    }
+                }
+            })
+
         }
 
         return view
@@ -104,73 +162,74 @@ class MainActivity : AppCompatActivity() {
         enableEdgeToEdge()
         setContentView(R.layout.activity_main)
 
-        val filePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-            uri?.let {
-                val json = readFile(uri)
-                if (json != null) {
-                    convertJSON(json)
-                }
-            }
-        }
-
-        taskAdapter = TaskAdapter(this, TasksList)
+        taskAdapter = TaskAdapter(this, TasksList, this)
 
         val listView = findViewById<ListView>(R.id.list)
         listView.adapter = taskAdapter
 
-        findViewById<Button>(R.id.add_button).setOnClickListener {
-            val taskDescription = findViewById<EditText>(R.id.task_description_input)
-            TasksList.add(Task(taskDescription.text.toString()))
-            taskAdapter.notifyDataSetChanged()
-            taskDescription.setText("")
+        findViewById<ImageButton>(R.id.add_button).setOnClickListener {
+            val descriptionField = findViewById<EditText>(R.id.task_description_input)
+            val jsonObject = JSONObject()
+            jsonObject.put("description", descriptionField.text.toString())
+
+            val mediaType = "application/json".toMediaTypeOrNull()
+            val body = jsonObject.toString().toRequestBody(mediaType)
+
+            val url = "http://10.0.2.2:5112/api/ToDo/"
+            val request = Request.Builder().url(url).post(body).build()
+
+            client.newCall(request).enqueue(object: Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    e.printStackTrace()
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    runOnUiThread {
+                        TasksList.add(Task(descriptionField.text.toString()))
+                        taskAdapter.notifyDataSetChanged()
+                        descriptionField.setText("")
+                    }
+                }
+            })
         }
 
-        findViewById<Button>(R.id.download_button).setOnClickListener {
-            val json = JSONArray()
+        getData()
 
-            for (task in TasksList) {
-                val taskObject = JSONObject()
-                taskObject.put("description", task.description)
-                taskObject.put("flag", task.flag)
-                json.put(taskObject)
-            }
-
-            val directory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            var fileName = "to-do_save.json"
-            var file = File(directory, fileName)
-            var index = 1
-            while (file.exists()) {
-                fileName = "to-do_save($index).json"
-                file = File(directory, fileName)
-                index++
-            }
-
-            val fileOutputStream = FileOutputStream(file)
-            fileOutputStream.write(json.toString().toByteArray())
-            fileOutputStream.close()
-
-            Toast.makeText(this, "saved to download folder", Toast.LENGTH_SHORT).show()
-        }
-
-        findViewById<Button>(R.id.upload_button).setOnClickListener {
-            filePicker.launch(arrayOf("*/*"))
+        findViewById<ImageButton>(R.id.update_button).setOnClickListener {
+            getData()
         }
     }
 
-    private fun readFile(uri: Uri): String? {
-        return contentResolver.openInputStream(uri)?.bufferedReader().use { it?.readText() }
-    }
-
-    private fun convertJSON(jsonString: String) {
-        val jsonArray = JSONArray(jsonString)
+    private fun getData() {
+        val url = "http://10.0.2.2:5112/api/ToDo/"
+        val request = Request.Builder().url(url).build()
         TasksList.clear()
-        for (i in 0 until jsonArray.length()) {
-            val jsonObject = jsonArray.getJSONObject(i)
-            val description = jsonObject.getString("description")
-            val flag = jsonObject.getBoolean("flag")
-            TasksList.add(Task(description, flag))
+
+        client.newCall(request).enqueue(object: Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                e.printStackTrace()
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                response.body?.let { responseBody ->
+                    val data = responseBody.string()
+                    runOnUiThread {
+                        parse(data)
+                    }
+                }
+            }
+        })
+    }
+
+    fun parse(data: String) {
+        val jsonTasks = JSONArray(data)
+        TasksList.clear()
+
+        for (i in 0 until jsonTasks.length()) {
+            val task = jsonTasks.getJSONObject(i)
+            TasksList.add(Task(task.getString("description"), task.getInt("id"), task.getBoolean("flag")))
         }
+        TasksList.sortBy { it.id }
         taskAdapter.notifyDataSetChanged()
-        Toast.makeText(this, "uploaded", Toast.LENGTH_SHORT).show()
     }
 }
