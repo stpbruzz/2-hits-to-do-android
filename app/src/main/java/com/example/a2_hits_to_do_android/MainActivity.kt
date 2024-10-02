@@ -67,20 +67,18 @@ class TaskAdapter(
 
         holder.description.setText(task.description)
         holder.description.isEnabled = false
-
         holder.editButton.setOnClickListener {
             if (!holder.description.isEnabled) {
                 holder.description.isEnabled = true
                 holder.editButton.setImageResource(R.drawable.ic_save)
             } else {
-                task.description = holder.description.text.toString()
                 holder.description.isEnabled = false
                 holder.editButton.setImageResource(R.drawable.ic_edit)
 
                 val id = tasks[position].id
                 val url = "http://10.0.2.2:5112/api/ToDo/$id/description"
                 val jsonObject = JSONObject()
-                jsonObject.put("description", task.description)
+                jsonObject.put("description", holder.description.text.toString())
 
                 val mediaType = "application/json".toMediaTypeOrNull()
                 val body = jsonObject.toString().toRequestBody(mediaType)
@@ -94,16 +92,15 @@ class TaskAdapter(
 
                     override fun onResponse(call: Call, response: Response) {
                         (context as? AppCompatActivity)?.runOnUiThread {
+                            task.description = holder.description.text.toString()
                             notifyDataSetChanged()
                         }
                     }
                 })
             }
         }
-
         holder.checkBox.isChecked = task.flag
-        holder.checkBox.setOnCheckedChangeListener { _, isChecked ->
-            task.flag = isChecked
+        holder.checkBox.setOnClickListener() {
             val id = tasks[position].id
             val url = "http://10.0.2.2:5112/api/ToDo/$id/flag"
 
@@ -116,11 +113,13 @@ class TaskAdapter(
 
                 override fun onResponse(call: Call, response: Response) {
                     (context as? AppCompatActivity)?.runOnUiThread {
+                        task.flag = !task.flag
                         notifyDataSetChanged()
                     }
                 }
             })
         }
+
 
         holder.deleteButton.setOnClickListener {
             val id = tasks[position].id
@@ -140,7 +139,6 @@ class TaskAdapter(
                     }
                 }
             })
-
         }
 
         return view
@@ -191,6 +189,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             })
+            getData()
         }
 
         getData()
@@ -200,7 +199,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun getData() {
+    fun getData() {
         val url = "http://10.0.2.2:5112/api/ToDo/"
         val request = Request.Builder().url(url).build()
         TasksList.clear()
